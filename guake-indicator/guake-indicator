@@ -1,0 +1,82 @@
+#! /usr/bin/env python2.7
+
+import gtk
+import appindicator
+import dbus
+import gettext
+import sys
+sys.path.append('/usr/lib/guake')
+from guake import Guake
+from dbusiface import DbusManager, DBUS_NAME, DBUS_PATH
+
+gettext.bindtextdomain('guake', '/usr/share/locale')
+gettext.textdomain('guake')
+_ = gettext.gettext
+
+class GuakeIndicator:
+    def __init__(self):
+        try:
+            bus = dbus.SessionBus()
+            self.remote_object = bus.get_object(DBUS_NAME, DBUS_PATH)
+            already_running = True
+        except dbus.DBusException:
+            instance = Guake()
+            self.remote_object = DbusManager(instance)
+            already_running = False
+        if already_running:
+            self.remote_object.show_hide()
+        self.indicator = appindicator.Indicator(_("guake-indicator"),
+                                           _("guake-tray"),
+                                           appindicator.CATEGORY_OTHER)
+        self.indicator.set_status(appindicator.STATUS_ACTIVE)
+        self.indicator.set_icon("guake-tray")
+        self.menu = gtk.Menu()
+        show = gtk.MenuItem(_('Show'))
+        show.set_sensitive(True)
+        show.connect('activate', self.show_hide)
+        show.show()
+        add_tab = gtk.MenuItem(_('Add New Tab'))
+        add_tab.set_sensitive(True)
+        add_tab.connect('activate', self.add_tab)
+        add_tab.show()
+        about = gtk.MenuItem(_('About'))
+        about.set_sensitive(True)
+        about.connect('activate', self.show_about)
+        about.show()
+        show_prefs = gtk.MenuItem(_('Preferences'))
+        show_prefs.set_sensitive(True)
+        show_prefs.connect('activate', self.show_prefs)
+        show_prefs.show()
+        destroy = gtk.MenuItem(_("Quit"))
+        destroy.connect("activate", self.destroy)
+        destroy.show()
+        self.menu.append(show)
+        self.menu.append(add_tab)
+        self.menu.append(about)
+        self.menu.append(show_prefs)
+        self.menu.append(destroy)
+
+    def show_hide(self, widget):
+        self.remote_object.show_hide()
+
+    def add_tab(self, widget):
+        self.show_hide(widget)
+        self.remote_object.add_tab()
+
+    def show_about(self, widget):
+        self.remote_object.show_about()
+
+    def show_prefs(self, widget):
+        self.remote_object.show_prefs()
+
+    def destroy(self, widget):
+        self.remote_object.quit()
+        gtk.main_quit()
+
+    def main(self):
+        self.indicator.set_menu(self.menu)
+        gtk.main()
+
+if __name__ == "__main__":
+    indicator = GuakeIndicator()
+    indicator.main()
