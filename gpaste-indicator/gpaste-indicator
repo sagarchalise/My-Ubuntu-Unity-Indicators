@@ -1,0 +1,160 @@
+#! /usr/bin/env python2.7
+
+from gi.repository import AppIndicator3 as AppIndicator
+from gi.repository import Gtk
+from gi.repository import Pango
+from dbus.mainloop.glib import DBusGMainLoop
+import dbus
+import gettext
+import subprocess
+
+gettext.bindtextdomain('GPaste', '/usr/share/locale')
+gettext.textdomain('GPaste')
+_ = gettext.gettext
+
+class GPasteDBusProxy:
+    def __init__(self):
+        self.intf = 'org.gnome.GPaste'
+        dbus_loop = DBusGMainLoop()
+        bus = dbus.SessionBus(mainloop=dbus_loop)
+        proxy = dbus.proxies.ProxyObject(conn=bus, bus_name='org.gnome.GPaste', object_path='/org/gnome/GPaste')
+        self.interface = dbus.proxies.Interface(proxy, self.intf)
+
+    def get_required_method(self, method_name):
+        return self.interface.get_dbus_method(method_name)
+
+    def handle_signal(self, signal, method):
+        return self.interface.connect_to_signal(signal, method)
+
+    def get_active_prop(self, prop):
+        get_active = self.interface.get_dbus_method('Get', dbus_interface=dbus.PROPERTIES_IFACE)
+        if get_active(self.intf, prop) == 1:
+            return True
+        else:
+            return False
+
+class GPasteIndicator:
+    def __init__(self):
+        self.indicator = AppIndicator.Indicator.new(_("gpaste-indicator"),
+                                           _("gpaste-indicator"),
+                                           AppIndicator.IndicatorCategory.OTHER)
+        self.bus = GPasteDBusProxy()
+        self.bus.handle_signal("Changed", self.update_history)
+        self.bus.handle_signal("ToggleHistory", self.toggle_history)
+        self.indicator.set_status(AppIndicator.IndicatorStatus.ATTENTION)
+        self.indicator.set_icon("gtk-paste")
+        self.menu = Gtk.Menu()
+        self.kill_switch = Gtk.CheckMenuItem(_("Track changes"))
+        self.kill_switch.set_active(True)
+        self.kill_switch.connect("toggled", self.toggle_daemon)
+        self.bus.handle_signal("Tracking", self.kill_switch.toggled)
+        self.kill_switch.show()
+        self.create_history()
+        self.no_history = Gtk.MenuItem('')
+        self.no_history.set_sensitive(False)
+        self.empty_history = Gtk.MenuItem(_("Empty History"))
+        self.empty_history.connect("activate", self._empty)
+        self.update_history()
+        self.fill_menu()
+
+    def _select(self, widget, index):
+        select = self.bus.get_required_method("Select")
+        select(index)
+
+    def _delete(self, index):
+        delete = self.bus.get_required_method("Delete")
+        delete(index)
+
+    def _empty(self, widget):
+        empty = self.bus.get_required_method("Empty")
+        empty()
+
+    def toggle_daemon(self, widget):
+        track = self.bus.get_required_method("Track")
+        track(self.kill_switch.get_active())
+
+    def open_settings(self, widget):
+        subprocess.call("/usr/libexec/gpaste/gpaste-settings")
+
+    def fill_menu(self):
+        active = self.bus.get_active_prop("Active")
+        if active is not None:
+            self.kill_switch.toggled()
+        self.menu.append(self.kill_switch)
+        sep = Gtk.SeparatorMenuItem()
+        sep.show()
+        self.menu.append(sep)
+        self.add_history_items()
+        self.menu.append(self.no_history)
+        sep = Gtk.SeparatorMenuItem()
+        sep.show()
+        self.menu.append(sep)
+        self.menu.append(self.empty_history)
+        gpaste_settings = Gtk.MenuItem(_("GPaste daemon settings"))
+        gpaste_settings.connect("activate", self.open_settings)
+        gpaste_settings.show()
+        destroy = Gtk.MenuItem(_("Quit"))
+        destroy.connect("activate", self.destroy)
+        destroy.show()
+        self.menu.append(gpaste_settings)
+        self.menu.append(destroy)
+        self.update_history()
+        self.indicator.set_menu(self.menu)
+
+    def destroy(self, widget):
+        Gtk.main_quit()
+
+    def update_history(self):
+        get_history = self.bus.get_required_method("GetHistory")
+        history = get_history()
+        if len(history) != 0 and history:
+            limit = min(len(history), len(self.history))
+            for i in xrange(0, limit):
+                self.update_history_items(i, history[i])
+            self.hide_history(limit)
+            self.no_history.hide()
+            self.empty_history.show()
+        else:
+            self.no_history.set_label(_("(Couldn't connect to GPaste daemon)") if history is None else _("Empty"))
+            self.hide_history()
+            self.empty_history.hide()
+            self.no_history.show()
+
+
+    def toggle_history(self):
+        self.menu.popup()
+
+    def create_history_item(self, index):
+        item = Gtk.MenuItem();
+        item.connect("activate", self._select, index)
+        return item
+
+
+    def create_history(self):
+        self.history = []
+        for i in xrange(0, 20):
+            self.history.append(self.create_history_item(i))
+
+    def add_history_items(self):
+        for i in xrange(0, len(self.history)):
+            self.menu.append(self.history[i])
+
+    def hide_history(self, index=0):
+        for i in xrange(index, len(self.history)):
+            self.history[i].hide()
+
+    def update_history_items(self, index, element):
+        element =  element.splitlines(3)[::3];
+        label = Gtk.Label()
+        label.set_text("".join(element))
+        label.set_max_width_chars(50)
+        label.set_ellipsize(Pango.EllipsizeMode.END)
+        self.history[index].set_label(label.get_text())
+        self.history[index].show()
+
+    def main(self):
+        Gtk.main()
+
+if __name__ == "__main__":
+    indicator = GPasteIndicator()
+    indicator.main()
