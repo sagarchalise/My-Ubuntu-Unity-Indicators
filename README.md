@@ -3,15 +3,6 @@ My Unity Indicators
 
 Currently consists:
 	
-**NepCalindicator**:
-
-Nepali Calender Indicator
-Forked from https://github.com/jwalanta/nepcalapplet
-
-<code>
-git clone -b nepcalindicator GIT_REPO
-</code>
-
 **Guake Indicator**:
 
 Guake Terminal indicator
