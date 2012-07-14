@@ -1,0 +1,136 @@
+--- guake	2012-06-07 01:16:37.000000000 +0545
++++ guake-indicator	2012-07-14 12:02:02.485365766 +0545
+@@ -158,7 +158,10 @@
+         """If the gconf var use_trayicon be changed, this method will
+         be called and will show/hide the trayicon.
+         """
+-        self.guake.tray_icon.set_visible(entry.value.get_bool())
++        if hasattr(self.guake.tray_icon, 'set_status'):
++            self.guake.tray_icon.set_status(entry.value.get_bool())
++        else:
++            self.guake.tray_icon.set_visible(entry.value.get_bool())
+ 
+     def ontop_toggled(self, client, connection_id, entry, data):
+         """If the gconf var window_ontop be changed, this method will
+@@ -531,13 +534,25 @@
+ 
+         # setting global hotkey and showing a pretty notification =)
+         guake.globalhotkeys.init()
+-
+         # trayicon!
+-        img = pixmapfile('guake-tray.png')
+-        self.tray_icon = gtk.status_icon_new_from_file(img)
+-        self.tray_icon.set_tooltip(_('Guake Terminal'))
+-        self.tray_icon.connect('popup-menu', self.show_menu)
+-        self.tray_icon.connect('activate', self.show_hide)
++        try:
++            import appindicator
++            self.tray_icon = appindicator.Indicator(_("guake-indicator"), _("guake-tray"), appindicator.CATEGORY_OTHER)
++            self.tray_icon.set_icon("guake-tray")
++            self.tray_icon.set_status(appindicator.STATUS_ACTIVE)
++            menu = self.get_widget('tray-menu')
++            show = gtk.MenuItem(_('Show'))
++            show.set_sensitive(True)
++            show.connect('activate', self.show_hide)
++            show.show()
++            menu.prepend(show)
++            self.tray_icon.set_menu(menu)
++        except ImportError:
++            img = pixmapfile('guake-tray.png')
++            self.tray_icon = gtk.status_icon_new_from_file(img)
++            self.tray_icon.set_tooltip(_('Guake Terminal'))
++            self.tray_icon.connect('popup-menu', self.show_menu)
++            self.tray_icon.connect('activate', self.show_hide)
+ 
+         # adding images from a different path.
+         ipath = pixmapfile('guake.png')
+@@ -787,9 +802,9 @@
+             self.add_tab()
+ 
+         window_rect = self.get_final_window_rect()
+-        self.window.move(window_rect.x, window_rect.y)
+         self.window.resize(window_rect.width, window_rect.height)
+         self.window.show_all()
++        self.window.move(window_rect.x, window_rect.y)
+ 
+         try:
+             # does it work in other gtk backends
+@@ -968,7 +983,10 @@
+             if not val:
+                 self.toolbar.hide()
+         else:
++            window_rect = self.get_final_window_rect()
+             self.window.unfullscreen()
++            self.window.resize(window_rect.width, window_rect.height)
++            self.window.move(window_rect.x, window_rect.y)
+             self.fullscreen = False
+ 
+             # making sure that tabbar and resizer will come back to
+@@ -1314,41 +1332,41 @@
+     from optparse import OptionParser
+     parser = OptionParser()
+     parser.add_option('-t', '--toggle-visibility', dest='show_hide',
+-            action='store_true', default=False,
+-            help=_('Toggles the visibility of the terminal window'))
++    action='store_true', default=False,
++    help=_('Toggles the visibility of the terminal window'))
+ 
+     parser.add_option('-p', '--preferences', dest='show_preferences',
+-            action='store_true', default=False,
+-            help=_('Shows Guake preference window'))
+-
++    action='store_true', default=False,
++    help=_('Shows Guake preference window'))
++    
+     parser.add_option('-a', '--about', dest='show_about',
+-            action='store_true', default=False,
+-            help=_('Shows Guake\'s about info'))
+-
++    action='store_true', default=False,
++    help=_('Shows Guake\'s about info'))
++    
+     parser.add_option('-n', '--new-tab', dest='new_tab',
+-            action='store', default='',
+-            help=_('Add a new tab'))
+-
++    action='store', default='',
++    help=_('Add a new tab'))
++    
+     parser.add_option('-s', '--select-tab', dest='select_tab',
+-            action='store', default='',
+-            help=_('Select a tab'))
+-
++    action='store', default='',
++    help=_('Select a tab'))
++    
+     parser.add_option('-g', '--selected-tab', dest='selected_tab',
+-            action='store_true', default=False,
+-            help=_('Return the selectd tab index.'))
+-
++    action='store_true', default=False,
++    help=_('Return the selectd tab index.'))
++    
+     parser.add_option('-e', '--execute-command', dest='command',
+-            action='store', default='',
+-            help=_('Execute an arbitrary command in the selected tab.'))
+-
++    action='store', default='',
++    help=_('Execute an arbitrary command in the selected tab.'))
++    
+     parser.add_option('-r', '--rename-tab', dest='rename_tab',
+-            action='store', default='',
+-            help=_('Rename the selected tab.'))
+-
++    action='store', default='',
++    help=_('Rename the selected tab.'))
++    
+     parser.add_option('-q', '--quit', dest='quit',
+-            action='store_true', default=False,
+-            help=_('Says to Guake go away =('))
+-
++    action='store_true', default=False,
++    help=_('Says to Guake go away =('))
++    
+     options = parser.parse_args()[0]
+ 
+     # Trying to get an already running instance of guake. If it is not
