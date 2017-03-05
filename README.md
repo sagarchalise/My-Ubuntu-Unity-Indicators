@@ -5,6 +5,9 @@ Currently consists:
 	
 **Guake Indicator**:
 
+*Guake Currently supports appindicator.
+
+
 Guake Terminal indicator
 <code>
 git clone -b guake-indicator GIT_REPO
